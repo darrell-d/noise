@@ -1,0 +1,14 @@
+{% extends 'homepage_base.html' %}
+{% block title %}Log in{% endblock %}
+{% block content %}
+<section style="max-width:28rem;margin:4rem auto;padding:1rem">
+    <h1>Log in to {{ site_title }}</h1>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <input type="hidden" name="next" value="{{ next }}">
+        <button type="submit">Log in</button>
+    </form>
+    <p><a href="/noise/">Back to Noise</a></p>
+</section>
+{% endblock %}

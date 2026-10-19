@@ -1,0 +1,11 @@
+.env
+.venv/
+data/
+staticfiles/
+__pycache__/
+*.py[cod]
+*.sqlite3
+.DS_Store
+.coverage
+backups/
+deploy/rds-global-bundle.pem

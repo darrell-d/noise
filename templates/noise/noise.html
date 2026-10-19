@@ -1,0 +1,268 @@
+{% extends 'homepage_base.html' %}
+{% load static %}
+{% load gps %}
+{% load noise_markdown %}
+
+{% block title %}Noise{% endblock %}
+
+{% block additional_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'noise/styles.css' %}?v=20260831c">
+{% endblock additional_css %}
+
+{% block additional_js %}
+<script src="{% static 'noise/game-of-life.js' %}?v=20260728a"></script>
+<script src="{% static 'noise/scripts.js' %}?v=20260831c"></script>
+<script src="{% static 'noise/vendor/blockrain.jquery.min.js' %}?v=0.2.0"></script>
+<script src="{% static 'noise/mini-apps/tetris.js' %}?v=20260728f"></script>
+<script src="{% static 'noise/lightbox.js' %}?v=20260727a"></script>
+<script src="{% static 'base/archive-nav.js' %}?v=20260727b"></script>
+{% endblock additional_js %}
+
+{% block content %}
+<section class="noise-journal{% if noise_detail %} noise-journal--detail{% endif %}" aria-labelledby="noise-journal-title">
+    {{ noise_life_seeds|json_script:"noise-life-seeds" }}
+    <canvas class="noise-pixel-background" data-noise-life aria-hidden="true"></canvas>
+    <output class="noise-generation-counter" data-noise-generation aria-label="Conway generation">0x0000</output>
+
+    <header class="noise-journal-header">
+        <div class="noise-journal-header__inner">
+            <div class="noise-journal-identity">
+                <h1 id="noise-journal-title" class="noise-journal-brand">
+                    <a href="/noise/">{{ site_title }}</a>
+                </h1>
+                <p class="noise-journal-deck">{{ site_tagline }}</p>
+            </div>
+
+            <div class="noise-journal-actions">
+                <nav class="noise-journal-nav" aria-label="Primary">
+                    <a href="/noise/" class="active" aria-current="page">Noise</a>
+                </nav>
+                {% if request.user.is_authenticated and request.user.is_staff %}
+                <a class="noise-icon-button" href="{% url 'noise-add' %}" aria-label="Add Noise" data-tooltip="Add Noise">
+                    <span class="material-icons" aria-hidden="true">add</span>
+                </a>
+                {% endif %}
+                {% if request.user.is_authenticated %}
+                <form class="noise-logout-form" method="post" action="{% url 'noise-logout' %}">
+                    {% csrf_token %}
+                    <button class="noise-icon-button" type="submit" aria-label="Log out" data-tooltip="Log out">
+                        <span class="material-icons" aria-hidden="true">logout</span>
+                    </button>
+                </form>
+                {% else %}
+                <button class="noise-icon-button" type="button" data-noise-login-open aria-label="Log in" data-tooltip="Log in">
+                    <span class="material-icons" aria-hidden="true">person</span>
+                </button>
+                {% endif %}
+                <button class="noise-icon-button" type="button" data-noise-life-only aria-label="Show only Game of Life">
+                    <span class="material-icons" aria-hidden="true">grid_view</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    {% if not request.user.is_authenticated %}
+    <dialog class="noise-login-dialog" data-noise-login-dialog aria-labelledby="noise-login-title">
+        <div class="noise-login-dialog__header">
+            <div>
+                <p class="noise-login-dialog__eyebrow">Identify signal</p>
+                <h2 id="noise-login-title">Log in to Noise</h2>
+            </div>
+            <button class="noise-login-dialog__close" type="button" data-noise-login-close aria-label="Close login">
+                <span class="material-icons" aria-hidden="true">close</span>
+            </button>
+        </div>
+        <p class="noise-login-dialog__intro">Choose an account to continue.</p>
+        <div class="noise-login-providers">
+            <a href="{% url 'login' %}?next={{ request.get_full_path|urlencode }}">Username and password</a>
+            {% for provider, label in login_providers %}
+            <a href="{% url 'noise-login' provider %}?next={{ request.get_full_path|urlencode }}">{{ label }}</a>
+            {% endfor %}
+        </div>
+        <p class="noise-login-dialog__status" data-noise-login-status aria-live="polite">
+            {% for message in messages %}{{ message }}{% if not forloop.last %}<br>{% endif %}{% endfor %}
+        </p>
+    </dialog>
+    {% endif %}
+
+    <div class="noise-feed-shell">
+        {% for group in groups %}
+        <section id="noise-year-{{ group.label|slugify }}" class="noise-year-section{% if group.archive_locked %} noise-year-section--locked{% endif %}" aria-labelledby="noise-year-heading-{{ group.label|slugify }}">
+            <div class="noise-roll" data-noise-year="{{ group.label }}">
+                {% if group.archive_locked %}
+                {% for preview in group.archive_previews %}
+                <article class="noise-card noise-card--archive-preview" aria-hidden="true">
+                    <div class="noise-card-inner">
+                        <div class="noise-archive-preview-meta"></div>
+                        {% if preview.has_image %}
+                        <div class="noise-archive-preview-media">
+                            <img src="{% url 'noise-archive-preview' preview.id %}" alt="" loading="lazy" decoding="async">
+                        </div>
+                        {% else %}
+                        <div class="noise-archive-preview-copy">
+                            <span></span><span></span><span></span>
+                        </div>
+                        {% endif %}
+                        <div class="noise-archive-preview-strip"></div>
+                    </div>
+                </article>
+                {% endfor %}
+                {% else %}
+                {% for noise in group.noises %}
+                {% with noise_media_url=noise.public_media_url %}
+                <article
+                    id="noise-post-{{ noise.id }}"
+                    class="noise-card noise-card-{{ noise.noise_content_type }}{% if noise.bucket == 'paramour' %} noise-card--paramour{% endif %} {% if noise.is_tall %}is-tall{% endif %}{% if noise_detail %} is-detail{% endif %}"
+                    data-tooltip="{{ noise.public_extras }}"
+                    data-noise-bucket="{{ noise.bucket }}"
+                    data-noise-type="{{ noise.noise_content_type }}"
+                    data-noise-date="{{ noise.date_added|date:'c' }}">
+                    <div class="noise-card-inner">
+                        <div class="noise-meta">
+                            <span class="noise-location" aria-hidden="true">🧭</span>
+                            <span class="noise-meta-copy">
+                                <span class="noise-location-label">{% noise_location noise.location %}</span>
+                                <span class="noise-weekday">On a {{ noise.date_added|date:'l' }}</span>
+                            </span>
+                            {% if request.user.is_authenticated and request.user.is_staff %}
+                            <a class="noise-admin-edit-link" href="{% url 'noise-edit' noise.id %}" aria-label="Edit this Noise post" title="Edit">
+                                <span class="material-icons" aria-hidden="true">edit</span>
+                            </a>
+                            {% endif %}
+                        </div>
+
+                        {% if noise.noise_content_type == 'image' %}
+                        <a href="{{ noise_media_url }}" class="noise-media-link noise-lightbox-trigger" data-noise-lightbox-kind="image" aria-label="Open image post">
+                            <img data-noise-lazy-src="{{ noise_media_url }}" class="noise-media noise-lazy" alt="{% firstof noise.public_title 'Noise image' %}" decoding="async">
+                            <noscript>
+                                <img src="{{ noise_media_url }}" class="noise-media" alt="{% firstof noise.public_title 'Noise image' %}">
+                            </noscript>
+                        </a>
+                        {% elif noise.noise_content_type == 'video' %}
+                        <video controls preload="none" class="noise-media noise-video noise-lazy" data-noise-lazy-src="{{ noise_media_url }}"{% if noise.video_loop %} loop{% endif %}{% if noise.video_autoplay %} autoplay muted playsinline{% endif %}>
+                            Your browser does not support the video tag.
+                        </video>
+                        {% endif %}
+
+                        {% if noise.public_title %}
+                        <h3 class="noise-title">{{ noise.public_title|noise_markdown_inline }}</h3>
+                        {% endif %}
+
+                        {% if noise_detail and noise.noise_body %}
+                        <div class="noise-body">{{ noise.noise_body|noise_markdown }}</div>
+                        {% elif noise.body_preview_display %}
+                        <div class="noise-body">{{ noise.body_preview_display|noise_markdown }}</div>
+                        {% endif %}
+
+                        {% if noise.body_is_truncated and not noise_detail %}
+                        <button type="button" class="noise-expand-button noise-lightbox-trigger" data-noise-lightbox-kind="{% if noise.noise_content_type == 'image' %}image{% else %}text{% endif %}"{% if noise.noise_content_type == 'image' %} data-noise-lightbox-image="{{ noise_media_url }}"{% endif %} aria-label="Read full post" title="Read full post">
+                            <span class="material-icons" aria-hidden="true">fullscreen</span>
+                        </button>
+                        {% endif %}
+
+                        {% if noise.noise_content_type == 'image' or noise.body_is_truncated %}
+                        <template class="noise-lightbox-copy">
+                            {% if noise.public_title %}
+                            <h3 class="noise-lightbox-title">{{ noise.public_title|noise_markdown_inline }}</h3>
+                            {% endif %}
+                            {% if noise.noise_body %}
+                            <div class="noise-lightbox-body">{{ noise.noise_body|noise_markdown }}</div>
+                            {% endif %}
+                        </template>
+                        {% endif %}
+
+                        <footer class="noise-card-pulse">
+                            {% if noise.bucket == 'paramour' %}
+                            <div class="noise-paramour-heart-strip" data-noise-heart-strip data-noise-value="{{ noise.actual_noise|escape }}" aria-hidden="true"></div>
+                            {% else %}
+                            <canvas class="noise-value-strip" data-noise-value="{{ noise.actual_noise|escape }}" aria-hidden="true"></canvas>
+                            {% endif %}
+                            <a class="noise-permalink" href="{{ noise.get_absolute_url }}" aria-label="Open permanent link for this post" data-tooltip="Permalink">
+                                <span class="material-icons" aria-hidden="true">link</span>
+                            </a>
+                        </footer>
+                    </div>
+                </article>
+                {% endwith %}
+                {% if forloop.parentloop.first and not noise_detail %}
+                    {% if forloop.counter == 3 %}
+                        {% include 'noise/includes/_tetris_app.html' %}
+                    {% elif forloop.last and forloop.counter < 3 %}
+                        {% include 'noise/includes/_tetris_app.html' %}
+                    {% endif %}
+                {% endif %}
+                {% endfor %}
+                {% endif %}
+            </div>
+
+            {% if not noise_detail %}<div class="noise-year-marker">
+                <h2 id="noise-year-heading-{{ group.label|slugify }}" class="sr-only">{{ group.label }}</h2>
+                <button class="noise-year-marker__button" type="button" data-year-menu-toggle aria-expanded="false" aria-label="Jump from {{ group.label }} to another year">
+                <span class="noise-year-marker__digits" aria-hidden="true">
+                    {% for digit in group.label %}<span>{{ digit }}</span>{% endfor %}
+                </span>
+                </button>
+                <div class="archive-year-menu" data-year-menu hidden>
+                    {% for year in year_nav %}<a href="#noise-year-{{ year|slugify }}">{{ year }}</a>{% endfor %}
+                </div>
+            </div>{% endif %}
+            {% if group.show_archive_gate %}
+            <div class="noise-archive-gate">
+                <p>Keep Peeping</p>
+                <button type="button" data-noise-login-open>
+                    <span class="material-icons" aria-hidden="true">person</span>
+                    <span>Login to view the archive</span>
+                </button>
+            </div>
+            {% endif %}
+        </section>
+        {% empty %}
+        <div class="noise-journal-empty">
+            <p>No public noise is currently available.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <button class="noise-life-exit" type="button" data-noise-life-exit aria-label="Return to posts" hidden>
+        <span class="material-icons" aria-hidden="true">close</span>
+    </button>
+    <button class="archive-top-button" type="button" data-back-to-top aria-label="Back to top" data-tooltip="Back to top">
+        <span class="material-icons" aria-hidden="true">arrow_upward</span>
+    </button>
+
+    <div class="noise-lightbox" data-noise-lightbox role="dialog" aria-modal="true" aria-labelledby="noise-lightbox-label" hidden>
+        <article class="noise-lightbox-card">
+            <header class="noise-lightbox-header">
+                <span class="noise-lightbox-target" aria-hidden="true"></span>
+                <span id="noise-lightbox-label" class="noise-lightbox-location"></span>
+                <div class="noise-lightbox-controls">
+                    <button type="button" data-noise-lightbox-action="zoom-out" aria-label="Zoom out" title="Zoom out">
+                        <span class="material-icons" aria-hidden="true">remove</span>
+                    </button>
+                    <button type="button" data-noise-lightbox-action="reset" aria-label="Reset zoom" title="Reset zoom">
+                        <span class="material-icons" aria-hidden="true">fit_screen</span>
+                    </button>
+                    <button type="button" data-noise-lightbox-action="zoom-in" aria-label="Zoom in" title="Zoom in">
+                        <span class="material-icons" aria-hidden="true">add</span>
+                    </button>
+                    <button type="button" data-noise-lightbox-action="close" aria-label="Close" title="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
+                </div>
+            </header>
+            <div class="noise-lightbox-stage">
+                <div class="noise-lightbox-media">
+                    <img class="noise-lightbox-image" alt="">
+                </div>
+                <div class="noise-lightbox-text"></div>
+            </div>
+            <footer class="noise-lightbox-pulse">
+                <canvas aria-hidden="true"></canvas>
+            </footer>
+        </article>
+    </div>
+</section>
+{% endblock %}

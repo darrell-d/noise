@@ -1,0 +1,107 @@
+{% extends 'homepage_base.html' %}
+{% load static %}
+{% load noise_markdown %}
+
+{% block additional_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'noise/styles.css' %}?v=20260731c">
+{% endblock additional_css %}
+
+{% block additional_js %}
+<script src="{% static 'noise/form.js' %}?v=20260728a" defer></script>
+<script src="{% static 'noise/location-capture.js' %}?v=20260803a" defer></script>
+{% endblock additional_js %}
+
+{% block content %}
+<section class="noise-journal noise-editor-journal" aria-labelledby="noise-editor-title">
+    <header class="noise-journal-header">
+        <div class="noise-journal-header__inner">
+            <div class="noise-journal-identity">
+                <p class="noise-transmission-label">{% block transmission_label %}{% endblock %}</p>
+                <h1 id="noise-editor-title" class="noise-journal-brand">{% block editor_title %}{% endblock %}</h1>
+            </div>
+            <div class="noise-journal-actions">
+                <nav class="noise-journal-nav" aria-label="Primary">
+                    <a href="/noise/" class="active">Noise</a>
+                </nav>
+                <a class="noise-icon-button" href="/noise/" aria-label="Back to Noise" title="Back to Noise">
+                    <span class="material-icons" aria-hidden="true">close</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <div class="noise-editor-shell">
+        {% if status == 'success' %}<p class="noise-alert">Transmission saved.</p>{% endif %}
+        {% if status == 'error' %}<p class="noise-alert noise-alert-error">Transmission could not be saved. Check the marked fields.</p>{% endif %}
+        {% if messages %}
+            {% for message in messages %}<p class="noise-alert noise-alert-{{ message.tags }}">{{ message }}</p>{% endfor %}
+        {% endif %}
+
+        <div class="noise-edit-shell">
+            <form class="noise-edit-form noise-card-inner" method="post" accept-charset="utf-8" enctype="multipart/form-data">
+                {% csrf_token %}
+                {{ form.non_field_errors }}
+                <div class="noise-media-picker">
+                    {% with field=form.media %}
+                    <div class="noise-field noise-field-{{ field.name }}">
+                        {{ field.label_tag }}
+                        {{ field }}
+                        {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+                        {{ field.errors }}
+                    </div>
+                    {% endwith %}
+                    <div class="noise-upload-preview-shell">
+                        <img class="noise-upload-preview" data-noise-upload-preview alt="New media preview" hidden>
+                    </div>
+                </div>
+                {% for field in form %}
+                {% if field.name != 'media' %}
+                <div class="noise-field noise-field-{{ field.name }}{% if field.widget_type == 'checkbox' %} noise-field-checkbox{% endif %}">
+                    {{ field.label_tag }}
+                    {{ field }}
+                    {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+                    {{ field.errors }}
+                </div>
+                {% endif %}
+                {% endfor %}
+                <div class="noise-actions">
+                    <button class="noise-button" type="submit">
+                        <span class="material-icons" aria-hidden="true">send</span>
+                        <span>Save</span>
+                    </button>
+                    {% if noise %}
+                    <button class="noise-button noise-button-danger" type="submit" form="noise-delete-form">
+                        <span class="material-icons" aria-hidden="true">delete</span>
+                        <span>Delete</span>
+                    </button>
+                    {% endif %}
+                </div>
+            </form>
+
+            {% if noise %}
+            <form id="noise-delete-form" method="post" action="{% url 'noise-delete' noise.id %}" onsubmit="return window.confirm('Delete this Noise post permanently?');">
+                {% csrf_token %}
+            </form>
+            <aside class="noise-edit-preview noise-card-inner">
+                <p class="noise-edit-preview-label">Current signal</p>
+                {% if noise.media %}
+                    {% if noise.noise_content_type == 'image' %}
+                    <img class="noise-edit-media" src="{{ noise.media.url }}" alt="">
+                    {% elif noise.noise_content_type == 'video' %}
+                    <video class="noise-edit-media" src="{{ noise.media.url }}" controls preload="metadata"></video>
+                    {% else %}
+                    <a href="{{ noise.media.url }}">Open current media</a>
+                    {% endif %}
+                {% endif %}
+                <h2>{{ noise.display_title|noise_markdown_inline }}</h2>
+                {% if noise.body_preview_display %}<div class="noise-body">{{ noise.body_preview_display|noise_markdown }}</div>{% endif %}
+                <p class="noise-edit-meta">{{ noise.bucket|default:'all' }} / {{ noise.date_added|date:'M j, Y g:i A' }}</p>
+            </aside>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock content %}

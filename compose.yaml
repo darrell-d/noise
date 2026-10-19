@@ -1,0 +1,15 @@
+services:
+  noise:
+    build: .
+    env_file: .env
+    environment:
+      BIND_ADDRESS: 0.0.0.0
+      PORT: 8000
+      DATA_DIR: /app/data
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8000}:8000"
+    volumes:
+      - noise-data:/app/data
+    restart: unless-stopped
+volumes:
+  noise-data:

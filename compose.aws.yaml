@@ -1,0 +1,31 @@
+services:
+  noise:
+    build: .
+    env_file: .env
+    environment:
+      BIND_ADDRESS: 0.0.0.0
+      PORT: 8000
+      DATA_DIR: /app/data
+    volumes:
+      - noise-data:/app/data
+      - ./deploy:/app/deploy:ro
+    restart: unless-stopped
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?Set SITE_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - noise
+    restart: unless-stopped
+volumes:
+  noise-data:
+  caddy-data:
+  caddy-config:
